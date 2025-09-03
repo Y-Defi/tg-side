@@ -52,6 +52,7 @@ Create a `.env` file and add the following configuration:
 ```
 BOT_TOKEN=your_telegram_bot_token
 MONGODB_URI=your_mongodb_connection_string
+HELIUS_RPC_URL=your_helius_api
 ```
 
 4. Start the service
