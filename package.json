@@ -1,0 +1,39 @@
+{
+  "name": "tg_side",
+  "dependencies": {
+    "@raydium-io/raydium-sdk-v2": "^0.1.114-alpha",
+    "@solana/spl-token": "^0.4.12",
+    "@solana/web3.js": "^1.98.0",
+    "@types/node": "^22.13.1",
+    "@types/node-telegram-bot-api": "^0.64.7",
+    "axios": "^1.7.9",
+    "bn.js": "^5.2.1",
+    "bs58": "^6.0.0",
+    "decimal.js": "^10.5.0",
+    "dotenv": "^16.4.7",
+    "mongoose": "^8.10.0",
+    "shamir-secret-sharing": "^0.0.4",
+    "telegraf": "^4.16.3",
+    "tsx": "^4.7.1",
+    "typescript": "^5.7.3"
+  },
+  "type": "module",
+  "devDependencies": {
+    "@types/axios": "^0.14.4",
+    "@types/mongoose": "^5.11.97",
+    "nodemon": "^3.1.9",
+    "pm2": "^5.4.3",
+    "ts-node": "^10.9.2"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "pm2:start": "pm2 start 'tsx src/index.ts' --name 'tg-side' --time",
+    "pm2:stop": "pm2 stop tg-side",
+    "pm2:restart": "pm2 restart tg-side --time",
+    "pm2:logs": "pm2 logs tg-side"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT"
+}
