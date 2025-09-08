@@ -6,7 +6,12 @@ const defaultLanguage = 'en';
 // 多语言支持
 const messages: Messages = {
   en: {
-    welcome: "Aril's Pocket LP Master v2 is here!<br/>Hot pool snipe, LP portfolio mgmt, smart exit— now support to ANY Solana wallet address (we never custody your funds)<br/><br/>Now live on Raydium, and Meteora / Orca coming soon.<br/><br/><span class=\"emoji emoji1f449\"></span> x.com/arilLPmaster",
+    welcome: "Aril's Pocket LP Master v2 is here!\n" +
+        "Hot pool snipe, LP portfolio mgmt, smart exit— now support to ANY Solana wallet address (we never custody your funds)\n" +
+        "\n" +
+        "Now live on Raydium, and Meteora / Orca coming soon.\n" +
+        "\n" +
+        "👉 x.com/arilLPmaster",
     help: 'Here are the available commands:',
     topPools: 'Top liquidity pools information',
     lpPortfolio: 'Your LP portfolio details',
@@ -78,7 +83,12 @@ const messages: Messages = {
     }
   },
   zh: {
-    welcome: "Aril 口袋LP大师 v2 上线！<br/>热门池狙击、LP投资组合管理、智能退出 —— 适配任意 Solana 钱包（bot不托管资金）。<br/><br/>现已支持 Raydium，Meteora / Orca 即将上线。<br/><br/><span class=\"emoji emoji1f449\"></span> x.com/arilLPmaster",
+    welcome: "Aril 口袋LP大师 v2 上线！\n" +
+        "热门池狙击、LP投资组合管理、智能退出 —— 适配任意 Solana 钱包（bot不托管资金）。\n" +
+        "\n" +
+        "现已支持 Raydium，Meteora / Orca 即将上线。\n" +
+        "\n" +
+        "👉 x.com/arilLPmaster",
     help: '以下是可用的命令：',
     topPools: '顶级流动性池信息',
     lpPortfolio: '您的LP投资组合详情',
