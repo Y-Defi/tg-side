@@ -39,7 +39,11 @@ export class FetchPoolService {
             // 首先尝试从数据库获取数据
             const cachedPools = await Pool.find({
                 'day.apr': { $gt: minApr },
-                tvl: { $gte: 50000 }
+                tvl: { $gte: 50000 },
+                $or: [
+                    { source: 'raydium' },
+                    { source: { $exists: false } }
+                ]
             })
             .sort({ 'day.apr': -1 })
             .limit(limit);
@@ -152,6 +156,7 @@ export class FetchPoolService {
                 { id: pool.id },
                 {
                     id: pool.id,
+                    source: 'raydium',
                     mintA: {
                         address: pool.mintA.address,
                         symbol: pool.mintA.symbol,
@@ -172,7 +177,7 @@ export class FetchPoolService {
                         volume: pool.day.volume,
                         apr: pool.day.apr,
                         feeApr: pool.day.feeApr,
-                        fee24h: pool.day.volumeFee
+                        fee24h: pool.day.fee24h
                     },
                     lastUpdated: now
                 },

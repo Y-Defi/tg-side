@@ -16,6 +16,7 @@ interface DayInfo {
 
 export interface IPool extends Document {
     id: string;
+    source?: string;
     mintA: TokenInfo;
     mintB: TokenInfo;
     price: number;
@@ -41,7 +42,8 @@ const DayInfoSchema = new Schema({
 }, { _id: false });
 
 const PoolSchema: Schema = new Schema({
-    id: { type: String, required: true, unique: true },
+    id: { type: String, required: true },
+    source: { type: String, default: 'raydium' },
     mintA: { type: TokenInfoSchema, required: true },
     mintB: { type: TokenInfoSchema, required: true },
     price: { type: Number, required: true },
@@ -55,5 +57,6 @@ const PoolSchema: Schema = new Schema({
 // 创建索引以加快查询速度
 PoolSchema.index({ 'day.apr': -1 });
 PoolSchema.index({ tvl: -1 });
+PoolSchema.index({ id: 1, source: 1 }, { unique: true });
 
 export const Pool = mongoose.model<IPool>('Pool', PoolSchema);
