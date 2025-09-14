@@ -3,6 +3,7 @@ import startCommand from './start';
 import helpCommand from './help';
 import topPoolsCommand from './topPools';
 import meteoraTopPoolsCommand from './meteoraTopPools';
+import orcaTopPoolsCommand from './orcaTopPools';
 import lpPortfolioCommand from './lpPortfolio';
 import walletCommand from './wallet';
 import referralCommand from './referral';
@@ -15,6 +16,7 @@ export const commands: CommandHandler[] = [
   helpCommand,
   topPoolsCommand,
   meteoraTopPoolsCommand,
+  orcaTopPoolsCommand,
   lpPortfolioCommand,
   walletCommand,
   referralCommand,
