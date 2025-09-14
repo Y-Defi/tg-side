@@ -2,6 +2,7 @@ import { CommandHandler } from '../types';
 import startCommand from './start';
 import helpCommand from './help';
 import topPoolsCommand from './topPools';
+import meteoraTopPoolsCommand from './meteoraTopPools';
 import lpPortfolioCommand from './lpPortfolio';
 import walletCommand from './wallet';
 import referralCommand from './referral';
@@ -13,6 +14,7 @@ export const commands: CommandHandler[] = [
   startCommand,
   helpCommand,
   topPoolsCommand,
+  meteoraTopPoolsCommand,
   lpPortfolioCommand,
   walletCommand,
   referralCommand,
