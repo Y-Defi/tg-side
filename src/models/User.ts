@@ -60,7 +60,8 @@ export interface IUser extends Document {
     points: number;
     // 新增字段
     lastPositionUpdate?: Date; // 上次更新positions的时间
-    positions?: PositionInfo[]; // 缓存的positions信息
+    positions?: PositionInfo[]; // 缓存的Raydium positions信息
+    meteoraPositions?: PositionInfo[]; // 缓存的Meteora positions信息
 }
 
 const TakeProfitStopLossSchema = new Schema({
@@ -133,7 +134,8 @@ const UserSchema: Schema = new Schema({
     points: { type: Number, default: 0 },
     // 新增字段
     lastPositionUpdate: { type: Date },
-    positions: { type: [PositionInfoSchema], default: [] }
+    positions: { type: [PositionInfoSchema], default: [] },
+    meteoraPositions: { type: [PositionInfoSchema], default: [] }
 });
 
 UserSchema.pre('save', function(next) {

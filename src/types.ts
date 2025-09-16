@@ -43,6 +43,7 @@ export interface SessionData {
     editingPosition?: { 
         type: 'takeProfit' | 'stopLoss'; 
         nftMint: string; 
+        source?: 'raydium' | 'meteora';
     }; 
     positionAmounts?: { 
         tokenAAmount: number; 

@@ -5,6 +5,7 @@ import topPoolsCommand from './topPools';
 import meteoraTopPoolsCommand from './meteoraTopPools';
 import orcaTopPoolsCommand from './orcaTopPools';
 import lpPortfolioCommand from './lpPortfolio';
+import meteoraLpPortfolioCommand, { handleMeteoraeTakeProfitButton, handleMeteoraStopLossButton, handleMeteoraPositionSettingInput } from './meteoraLpPortfolio';
 import walletCommand from './wallet';
 import referralCommand from './referral';
 import languageCommand, { handleLanguageCallbacks } from './language';
@@ -18,10 +19,11 @@ export const commands: CommandHandler[] = [
   meteoraTopPoolsCommand,
   orcaTopPoolsCommand,
   lpPortfolioCommand,
+  meteoraLpPortfolioCommand,
   walletCommand,
   referralCommand,
   languageCommand,
   profitLossCommand
 ];
 
-export { handleLanguageCallbacks, handleWalletCallbacks, handleProfitLossCallbacks };
+export { handleLanguageCallbacks, handleWalletCallbacks, handleProfitLossCallbacks, handleMeteoraeTakeProfitButton, handleMeteoraStopLossButton, handleMeteoraPositionSettingInput };

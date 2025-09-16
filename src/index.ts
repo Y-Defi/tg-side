@@ -1,11 +1,12 @@
 import { Telegraf, Markup, session } from 'telegraf';
 import dotenv from 'dotenv';
-import { commands, handleLanguageCallbacks, handleWalletCallbacks, handleProfitLossCallbacks } from './commands';
+import { commands, handleLanguageCallbacks, handleWalletCallbacks, handleProfitLossCallbacks, handleMeteoraeTakeProfitButton, handleMeteoraStopLossButton, handleMeteoraPositionSettingInput } from './commands';
 import { languageSettings } from './i18n';
 import { MyContext } from './types';
 import mongoose from 'mongoose';
 import { updateAllTokens } from './services/tokenService';
 import { RaydiumService } from './services/raydiumService';
+import { MeteoraService } from './services/meteoraService';
 import { FetchPoolService } from './services/fetchPoolService';
 // 导入处理函数
 import { handlePublicKeyInput } from './commands/wallet';
@@ -51,6 +52,8 @@ commands.forEach(cmd => {
 
 bot.action(/^tp_.*$/, (ctx) => handleTakeProfitButton(ctx));
 bot.action(/^sl_.*$/, (ctx) => handleStopLossButton(ctx));
+bot.action(/^tp_meteora_.*$/, (ctx) => handleMeteoraeTakeProfitButton(ctx));
+bot.action(/^sl_meteora_.*$/, (ctx) => handleMeteoraStopLossButton(ctx));
 
 // 注册语言选择回调
 handleLanguageCallbacks(bot);
@@ -99,7 +102,12 @@ bot.on('text', async (ctx: MyContext) => {
   if (ctx.session.waitingForTakeProfitValue && ctx.session.editingPosition || 
       ctx.session.waitingForStopLossValue && ctx.session.editingPosition) {
 
-      await handlePositionSettingInput(ctx, getMessage);
+      // 检查是否是meteora position
+      if (ctx.session.editingPosition?.source === 'meteora') {
+        await handleMeteoraPositionSettingInput(ctx, getMessage);
+      } else {
+        await handlePositionSettingInput(ctx, getMessage);
+      }
       return;
   } 
 });
@@ -116,6 +124,7 @@ const poolUpdateInterval = setInterval(() => {
 
 // 启动全局position更新任务
 RaydiumService.startGlobalPositionUpdateTask();
+MeteoraService.startGlobalPositionUpdateTask();
 
 // 设置命令菜单
 bot.telegram.setMyCommands(
@@ -145,6 +154,7 @@ process.once('SIGINT', () => {
   bot.stop('SIGINT');
   // 停止全局position更新任务
   RaydiumService.stopGlobalPositionUpdateTask();
+  MeteoraService.stopGlobalPositionUpdateTask();
   // 清除代币更新的定时器
   clearInterval(tokenUpdateInterval);
   // 清除池更新的定时器
@@ -158,6 +168,7 @@ process.once('SIGTERM', () => {
   bot.stop('SIGTERM');
   // 停止全局position更新任务
   RaydiumService.stopGlobalPositionUpdateTask();
+  MeteoraService.stopGlobalPositionUpdateTask();
   // 清除代币更新的定时器
   clearInterval(tokenUpdateInterval);
   // 清除池更新的定时器
