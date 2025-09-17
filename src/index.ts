@@ -1,12 +1,13 @@
 import { Telegraf, Markup, session } from 'telegraf';
 import dotenv from 'dotenv';
-import { commands, handleLanguageCallbacks, handleWalletCallbacks, handleProfitLossCallbacks, handleMeteoraeTakeProfitButton, handleMeteoraStopLossButton, handleMeteoraPositionSettingInput } from './commands';
+import { commands, handleLanguageCallbacks, handleWalletCallbacks, handleProfitLossCallbacks, handleMeteoraeTakeProfitButton, handleMeteoraStopLossButton, handleMeteoraPositionSettingInput, handleOrcaTakeProfitButton, handleOrcaStopLossButton, handleOrcaPositionSettingInput } from './commands';
 import { languageSettings } from './i18n';
 import { MyContext } from './types';
 import mongoose from 'mongoose';
 import { updateAllTokens } from './services/tokenService';
 import { RaydiumService } from './services/raydiumService';
 import { MeteoraService } from './services/meteoraService';
+import { OrcaService } from './services/orcaService';
 import { FetchPoolService } from './services/fetchPoolService';
 // 导入处理函数
 import { handlePublicKeyInput } from './commands/wallet';
@@ -54,6 +55,8 @@ bot.action(/^tp_.*$/, (ctx) => handleTakeProfitButton(ctx));
 bot.action(/^sl_.*$/, (ctx) => handleStopLossButton(ctx));
 bot.action(/^tp_meteora_.*$/, (ctx) => handleMeteoraeTakeProfitButton(ctx));
 bot.action(/^sl_meteora_.*$/, (ctx) => handleMeteoraStopLossButton(ctx));
+bot.action(/^orca_tp_.*$/, (ctx) => handleOrcaTakeProfitButton(ctx));
+bot.action(/^orca_sl_.*$/, (ctx) => handleOrcaStopLossButton(ctx));
 
 // 注册语言选择回调
 handleLanguageCallbacks(bot);
@@ -110,6 +113,12 @@ bot.on('text', async (ctx: MyContext) => {
       }
       return;
   }
+
+  // 处理Orca LP仓位的止盈止损输入
+  if (ctx.session.waitingForOrcaTakeProfitValue || ctx.session.waitingForOrcaStopLossValue) {
+      await handleOrcaPositionSettingInput(ctx, getMessage);
+      return;
+  }
 });
 
 // 设置定时任务更新所有代币信息
@@ -125,6 +134,7 @@ const poolUpdateInterval = setInterval(() => {
 // 启动全局position更新任务
 RaydiumService.startGlobalPositionUpdateTask();
 MeteoraService.startGlobalPositionUpdateTask();
+OrcaService.startGlobalPositionUpdateTask();
 
 // 设置命令菜单
 bot.telegram.setMyCommands(
@@ -155,6 +165,7 @@ process.once('SIGINT', () => {
   // 停止全局position更新任务
   RaydiumService.stopGlobalPositionUpdateTask();
   MeteoraService.stopGlobalPositionUpdateTask();
+  OrcaService.stopGlobalPositionUpdateTask();
   // 清除代币更新的定时器
   clearInterval(tokenUpdateInterval);
   // 清除池更新的定时器
@@ -169,6 +180,7 @@ process.once('SIGTERM', () => {
   // 停止全局position更新任务
   RaydiumService.stopGlobalPositionUpdateTask();
   MeteoraService.stopGlobalPositionUpdateTask();
+  OrcaService.stopGlobalPositionUpdateTask();
   // 清除代币更新的定时器
   clearInterval(tokenUpdateInterval);
   // 清除池更新的定时器

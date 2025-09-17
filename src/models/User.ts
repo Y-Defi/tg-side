@@ -62,6 +62,8 @@ export interface IUser extends Document {
     lastPositionUpdate?: Date; // 上次更新positions的时间
     positions?: PositionInfo[]; // 缓存的Raydium positions信息
     meteoraPositions?: PositionInfo[]; // 缓存的Meteora positions信息
+    orcaPositions?: any[]; // 缓存的Orca positions信息
+    orcaLpPositions?: Map<string, Position>; // Orca LP positions设置
 }
 
 const TakeProfitStopLossSchema = new Schema({
@@ -135,12 +137,21 @@ const UserSchema: Schema = new Schema({
     // 新增字段
     lastPositionUpdate: { type: Date },
     positions: { type: [PositionInfoSchema], default: [] },
-    meteoraPositions: { type: [PositionInfoSchema], default: [] }
+    meteoraPositions: { type: [PositionInfoSchema], default: [] },
+    orcaPositions: { type: [Schema.Types.Mixed], default: [] },
+    orcaLpPositions: {
+        type: Map,
+        of: PositionSchema,
+        default: () => new Map()
+    }
 });
 
 UserSchema.pre('save', function(next) {
     if (this.lpPositions && !(this.lpPositions instanceof Map)) {
         this.lpPositions = new Map(Object.entries(this.lpPositions));
+    }
+    if (this.orcaLpPositions && !(this.orcaLpPositions instanceof Map)) {
+        this.orcaLpPositions = new Map(Object.entries(this.orcaLpPositions));
     }
     next();
 });
@@ -151,6 +162,9 @@ UserSchema.post('find', function(docs) {
             if (doc.lpPositions && !(doc.lpPositions instanceof Map)) {
                 doc.lpPositions = new Map(Object.entries(doc.lpPositions));
             }
+            if (doc.orcaLpPositions && !(doc.orcaLpPositions instanceof Map)) {
+                doc.orcaLpPositions = new Map(Object.entries(doc.orcaLpPositions));
+            }
         });
     }
 });
@@ -158,6 +172,9 @@ UserSchema.post('find', function(docs) {
 UserSchema.post('findOne', function(doc) {
     if (doc && doc.lpPositions && !(doc.lpPositions instanceof Map)) {
         doc.lpPositions = new Map(Object.entries(doc.lpPositions));
+    }
+    if (doc && doc.orcaLpPositions && !(doc.orcaLpPositions instanceof Map)) {
+        doc.orcaLpPositions = new Map(Object.entries(doc.orcaLpPositions));
     }
 });
 

@@ -14,6 +14,8 @@ export interface SessionData {
     waitingForStopLoss?: boolean; 
     waitingForTakeProfitValue?: boolean; 
     waitingForStopLossValue?: boolean; 
+    waitingForOrcaTakeProfitValue?: boolean;
+    waitingForOrcaStopLossValue?: boolean; 
     pendingMint?: string; 
     referralCode: string; 
     solAmount?: number; 
@@ -41,9 +43,10 @@ export interface SessionData {
     withdrawAddress?: string; 
     settingsState?: 'waiting_for_tp' | 'waiting_for_sl'; 
     editingPosition?: { 
-        type: 'takeProfit' | 'stopLoss'; 
+        type: 'takeProfit' | 'stopLoss' | 'orcaTakeProfit' | 'orcaStopLoss'; 
         nftMint: string; 
         source?: 'raydium' | 'meteora';
+        positionMint?: string;
     }; 
     positionAmounts?: { 
         tokenAAmount: number; 
