@@ -1,10 +1,20 @@
-import { PublicKey, Connection } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
+import { 
+    WhirlpoolContext, 
+    ORCA_WHIRLPOOL_PROGRAM_ID, 
+    PriceMath,
+    getAllPositionAccountsByOwner,
+    PositionData,
+    WhirlpoolData
+} from '@orca-so/whirlpools-sdk';
+import { Wallet } from '@coral-xyz/anchor/dist/cjs/provider';
 import BN from 'bn.js';
 import Decimal from 'decimal.js';
 import { User } from '../models/User';
 import { getTokenInfo } from './tokenService';
 import { ProfitLossService } from './profitLossService';
 import dotenv from 'dotenv';
+import {connection} from "../config";
 
 dotenv.config();
 
@@ -43,6 +53,19 @@ interface ServiceResult {
     positions?: OrcaPositionInfo[];
 }
 
+// Mock wallet implementation for read-only operations
+class ReadOnlyWallet implements Wallet {
+    constructor(readonly publicKey: PublicKey) {}
+    
+    async signTransaction(): Promise<any> {
+        throw new Error('Read-only wallet cannot sign transactions');
+    }
+    
+    async signAllTransactions(): Promise<any[]> {
+        throw new Error('Read-only wallet cannot sign transactions');
+    }
+}
+
 export class OrcaService {
     private static readonly UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes
     private static updateTimers: Map<number, NodeJS.Timeout> = new Map();
@@ -53,9 +76,92 @@ export class OrcaService {
     }
 
     /**
+     * Calculate token amounts from position liquidity
+     */
+    private static calculateTokenAmounts(
+        position: PositionData,
+        whirlpool: WhirlpoolData
+    ): { amountA: BN; amountB: BN } {
+        try {
+            const liquidity = position.liquidity;
+            const sqrtPrice = whirlpool.sqrtPrice;
+            const tickLower = position.tickLowerIndex;
+            const tickUpper = position.tickUpperIndex;
+            
+            // Calculate sqrt prices for the position range
+            const sqrtPriceLower = PriceMath.tickIndexToSqrtPriceX64(tickLower);
+            const sqrtPriceUpper = PriceMath.tickIndexToSqrtPriceX64(tickUpper);
+            
+            // Calculate token amounts based on current price position
+            let amountA = new BN(0);
+            let amountB = new BN(0);
+            
+            if (sqrtPrice.lt(sqrtPriceLower)) {
+                // Current price is below range, all liquidity is in token A
+                amountA = this.getTokenAmountFromLiquidity(
+                    liquidity,
+                    sqrtPriceLower,
+                    sqrtPriceUpper,
+                    true
+                );
+            } else if (sqrtPrice.gt(sqrtPriceUpper)) {
+                // Current price is above range, all liquidity is in token B
+                amountB = this.getTokenAmountFromLiquidity(
+                    liquidity,
+                    sqrtPriceLower,
+                    sqrtPriceUpper,
+                    false
+                );
+            } else {
+                // Current price is in range, liquidity is in both tokens
+                amountA = this.getTokenAmountFromLiquidity(
+                    liquidity,
+                    sqrtPrice,
+                    sqrtPriceUpper,
+                    true
+                );
+                amountB = this.getTokenAmountFromLiquidity(
+                    liquidity,
+                    sqrtPriceLower,
+                    sqrtPrice,
+                    false
+                );
+            }
+            
+            return { amountA, amountB };
+        } catch (err) {
+            console.error('Error calculating token amounts:', err);
+            return { amountA: new BN(0), amountB: new BN(0) };
+        }
+    }
+    
+    /**
+     * Helper function to calculate token amount from liquidity
+     */
+    private static getTokenAmountFromLiquidity(
+        liquidity: BN,
+        sqrtPriceLower: BN,
+        sqrtPriceUpper: BN,
+        isTokenA: boolean
+    ): BN {
+        if (liquidity.eq(new BN(0))) return new BN(0);
+        
+        const Q64 = new BN(2).pow(new BN(64));
+        
+        if (isTokenA) {
+            // amount = liquidity * (sqrtPriceUpper - sqrtPriceLower) / (sqrtPriceUpper * sqrtPriceLower / Q64)
+            const priceDiff = sqrtPriceUpper.sub(sqrtPriceLower);
+            const denominator = sqrtPriceUpper.mul(sqrtPriceLower).div(Q64);
+            return liquidity.mul(priceDiff).div(denominator);
+        } else {
+            // amount = liquidity * (sqrtPriceUpper - sqrtPriceLower) / Q64
+            const priceDiff = sqrtPriceUpper.sub(sqrtPriceLower);
+            return liquidity.mul(priceDiff).div(Q64);
+        }
+    }
+
+    /**
      * Update user's Orca position info
-     * Note: This is a simplified mock implementation. 
-     * In production, you would need to properly integrate with Orca's API or SDK
      */
     private static async updatePositionInfo(telegramId: number): Promise<ServiceResult> {
         try {
@@ -66,12 +172,185 @@ export class OrcaService {
 
             console.log(`Updating Orca positions for user ${telegramId}`);
 
-            // For now, return empty positions since we don't have actual Orca integration
-            // In a real implementation, you would:
-            // 1. Connect to Solana
-            // 2. Query user's Orca positions
-            // 3. Parse and format the data
+            // Create read-only wallet from user's public key
+            const userPublicKey = new PublicKey(user.publicKey);
+            const wallet = new ReadOnlyWallet(userPublicKey);
+
+            const ctx = WhirlpoolContext.from(connection, wallet, ORCA_WHIRLPOOL_PROGRAM_ID);
+
+            // Get all positions for the user
+            const positionMap = await getAllPositionAccountsByOwner({
+                ctx,
+                owner: userPublicKey,
+                includesPositions: true,
+                includesPositionsWithTokenExtensions: true,
+                includesBundledPositions: false
+            });
+
             const positionsInfo: OrcaPositionInfo[] = [];
+
+            // Combine positions and positionsWithTokenExtensions
+            const allPositions = new Map([
+                ...positionMap.positions,
+                ...positionMap.positionsWithTokenExtensions
+            ]);
+
+            if (allPositions.size === 0) {
+                await User.findOneAndUpdate(
+                    { telegramId },
+                    { 
+                        lastPositionUpdate: new Date(),
+                        orcaPositions: []
+                    },
+                    { new: true }
+                );
+                
+                console.log(`No Orca positions found for user ${telegramId}`);
+                return { positions: [] };
+            }
+
+            // Create account fetcher using the context's fetcher
+            const fetcher = ctx.fetcher;
+            
+            // Get whirlpool data for all positions
+            const positionDatas = Array.from(allPositions.values());
+            
+            // Fetch unique whirlpool addresses
+            const uniqueWhirlpoolAddresses = [...new Set(positionDatas.map(pos => pos.whirlpool.toString()))];
+            const whirlpools = new Map<string, WhirlpoolData>();
+            
+            // Fetch each whirlpool
+            for (const whirlpoolAddress of uniqueWhirlpoolAddresses) {
+                try {
+                    const whirlpoolPubkey = new PublicKey(whirlpoolAddress);
+                    const whirlpoolData = await fetcher.getPool(whirlpoolPubkey);
+                    if (whirlpoolData) {
+                        whirlpools.set(whirlpoolAddress, whirlpoolData);
+                    }
+                } catch (err) {
+                    console.error(`Error fetching whirlpool ${whirlpoolAddress}:`, err);
+                }
+            }
+
+            // Process each position
+            for (const [address, position] of allPositions) {
+                try {
+                    const whirlpool = whirlpools.get(position.whirlpool.toString());
+                    if (!whirlpool) {
+                        console.error(`Whirlpool not found for position ${address}`);
+                        continue;
+                    }
+
+                    // Get token info
+                    const tokenAInfo = await getTokenInfo(whirlpool.tokenMintA.toString());
+                    const tokenBInfo = await getTokenInfo(whirlpool.tokenMintB.toString());
+                    
+                    const tokenADecimals = tokenAInfo?.decimals || 9;
+                    const tokenBDecimals = tokenBInfo?.decimals || 9;
+
+                    // Calculate token amounts
+                    const { amountA, amountB } = this.calculateTokenAmounts(position, whirlpool);
+                    
+                    const pooledAmountA = new Decimal(amountA.toString()).div(10 ** tokenADecimals);
+                    const pooledAmountB = new Decimal(amountB.toString()).div(10 ** tokenBDecimals);
+
+                    // Calculate values
+                    const tokenAPrice = tokenAInfo?.price || '0';
+                    const tokenBPrice = tokenBInfo?.price || '0';
+                    const tokenAValue = pooledAmountA.mul(tokenAPrice).toString();
+                    const tokenBValue = pooledAmountB.mul(tokenBPrice).toString();
+
+                    // Calculate fees (simplified - includes both collected and uncollected)
+                    const feeOwedA = new Decimal(position.feeOwedA.toString()).div(10 ** tokenADecimals);
+                    const feeOwedB = new Decimal(position.feeOwedB.toString()).div(10 ** tokenBDecimals);
+                    
+                    // Calculate rewards
+                    const rewardsInfos = [];
+                    
+                    if (feeOwedA.gt(0)) {
+                        const feeValueA = feeOwedA.mul(tokenAPrice);
+                        rewardsInfos.push({
+                            mint: tokenAInfo?.symbol || 'Unknown',
+                            address: whirlpool.tokenMintA.toString(),
+                            amount: feeOwedA.toString(),
+                            decimals: tokenADecimals,
+                            tokenPrice: tokenAPrice,
+                            tokenValue: feeValueA.toString()
+                        });
+                    }
+
+                    if (feeOwedB.gt(0)) {
+                        const feeValueB = feeOwedB.mul(tokenBPrice);
+                        rewardsInfos.push({
+                            mint: tokenBInfo?.symbol || 'Unknown',
+                            address: whirlpool.tokenMintB.toString(),
+                            amount: feeOwedB.toString(),
+                            decimals: tokenBDecimals,
+                            tokenPrice: tokenBPrice,
+                            tokenValue: feeValueB.toString()
+                        });
+                    }
+
+                    // Add reward tokens if present
+                    for (let i = 0; i < position.rewardInfos.length; i++) {
+                        const rewardInfo = position.rewardInfos[i];
+                        const rewardAmount = rewardInfo.amountOwed;
+                        if (rewardAmount && rewardAmount.gt(new BN(0))) {
+                            const whirlpoolRewardInfo = whirlpool.rewardInfos[i];
+                            if (whirlpoolRewardInfo && whirlpoolRewardInfo.mint) {
+                                const rewardTokenInfo = await getTokenInfo(whirlpoolRewardInfo.mint.toString());
+                                const rewardDecimals = rewardTokenInfo?.decimals || 9;
+                                const rewardAmountDecimal = new Decimal(rewardAmount.toString()).div(10 ** rewardDecimals);
+                                const rewardPrice = rewardTokenInfo?.price || '0';
+                                const rewardValue = rewardAmountDecimal.mul(rewardPrice);
+                                
+                                rewardsInfos.push({
+                                    mint: rewardTokenInfo?.symbol || 'Unknown',
+                                    address: whirlpoolRewardInfo.mint.toString(),
+                                    amount: rewardAmountDecimal.toString(),
+                                    decimals: rewardDecimals,
+                                    tokenPrice: rewardPrice,
+                                    tokenValue: rewardValue.toString()
+                                });
+                            }
+                        }
+                    }
+
+                    // Calculate price bounds
+                    const priceLower = PriceMath.tickIndexToPrice(
+                        position.tickLowerIndex,
+                        tokenADecimals,
+                        tokenBDecimals
+                    );
+                    const priceUpper = PriceMath.tickIndexToPrice(
+                        position.tickUpperIndex,
+                        tokenADecimals,
+                        tokenBDecimals
+                    );
+
+                    positionsInfo.push({
+                        poolId: position.whirlpool.toString(),
+                        publicKey: user.publicKey,
+                        positionMint: position.positionMint.toString(),
+                        rewardsInfos,
+                        tokenAPrice,
+                        tokenBPrice,
+                        tokenAValue,
+                        tokenBValue,
+                        displayInfo: {
+                            pool: `${tokenAInfo?.symbol || 'Unknown'} - ${tokenBInfo?.symbol || 'Unknown'}`,
+                            nft: position.positionMint.toString(),
+                            priceLower: priceLower.toFixed(6),
+                            priceUpper: priceUpper.toFixed(6),
+                            pooledAmountA: pooledAmountA.toString(),
+                            pooledAmountB: pooledAmountB.toString()
+                        }
+                    });
+                } catch (err) {
+                    console.error(`Error processing Orca position ${address}:`, err);
+                    continue;
+                }
+            }
 
             // Update user's position data
             await User.findOneAndUpdate(
@@ -237,39 +516,5 @@ export class OrcaService {
             this.globalUpdateTimer = null;
             console.log('Stopped global Orca position update task');
         }
-    }
-
-    /**
-     * Mock function to create sample Orca position data for testing
-     * Remove this in production and replace with actual Orca integration
-     */
-    static createMockPosition(userId: string): OrcaPositionInfo {
-        return {
-            poolId: 'mock_pool_' + Math.random().toString(36).substring(7),
-            publicKey: userId,
-            positionMint: 'mock_mint_' + Math.random().toString(36).substring(7),
-            rewardsInfos: [
-                {
-                    mint: 'SOL',
-                    address: '11111111111111111111111111111111',
-                    amount: '0.1',
-                    decimals: 9,
-                    tokenPrice: '100',
-                    tokenValue: '10'
-                }
-            ],
-            tokenAPrice: '100',
-            tokenBPrice: '1',
-            tokenAValue: '1000',
-            tokenBValue: '1000',
-            displayInfo: {
-                pool: 'SOL - USDC',
-                nft: 'mock_nft_' + Math.random().toString(36).substring(7),
-                priceLower: '90',
-                priceUpper: '110',
-                pooledAmountA: '10',
-                pooledAmountB: '1000'
-            }
-        };
     }
 }

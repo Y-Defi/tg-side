@@ -1,6 +1,7 @@
 {
   "name": "tg_side",
   "dependencies": {
+    "@coral-xyz/anchor": "~0.29.0",
     "@meteora-ag/dlmm": "^1.7.3",
     "@orca-so/common-sdk": "^0.6.11",
     "@orca-so/whirlpools-sdk": "^0.16.0",
