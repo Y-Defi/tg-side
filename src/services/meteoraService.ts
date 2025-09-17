@@ -81,9 +81,14 @@ export class MeteoraService {
 
             if (userPositions.size === 0) {
                 // 更新用户的lastPositionUpdate和空的meteoraPositions数组
-                user.lastPositionUpdate = new Date()
-                user.meteoraPositions = []
-                await user.save()
+                await User.findOneAndUpdate(
+                    { telegramId },
+                    { 
+                        lastPositionUpdate: new Date(),
+                        meteoraPositions: []
+                    },
+                    { new: true }
+                )
                 
                 return this.formatError('userNoPositions')
             }
@@ -202,9 +207,14 @@ export class MeteoraService {
 
 
             // 更新用户的lastPositionUpdate和meteoraPositions数组
-            user.lastPositionUpdate = new Date()
-            user.meteoraPositions = positionsInfo
-            await user.save()
+            await User.findOneAndUpdate(
+                { telegramId },
+                { 
+                    lastPositionUpdate: new Date(),
+                    meteoraPositions: positionsInfo
+                },
+                { new: true }
+            )
 
             console.log(`Updated Meteora positions for user ${telegramId}, found ${positionsInfo.length} positions`)
             

@@ -95,9 +95,14 @@ export class RaydiumService {
 
             if (!allPositions.length) {
                 // 更新用户的lastPositionUpdate和空的positions数组
-                user.lastPositionUpdate = new Date();
-                user.positions = [];
-                await user.save();
+                await User.findOneAndUpdate(
+                    { telegramId },
+                    { 
+                        lastPositionUpdate: new Date(),
+                        positions: []
+                    },
+                    { new: true }
+                );
                 
                 return this.formatError('userNoPositions');
             }
@@ -291,9 +296,14 @@ export class RaydiumService {
             }
 
             // 更新用户的lastPositionUpdate和positions数组
-            user.lastPositionUpdate = new Date();
-            user.positions = positionsInfo;
-            await user.save();
+            await User.findOneAndUpdate(
+                { telegramId },
+                { 
+                    lastPositionUpdate: new Date(),
+                    positions: positionsInfo
+                },
+                { new: true }
+            );
 
             console.log(`Updated positions for user ${telegramId}, found ${positionsInfo.length} positions`);
             
