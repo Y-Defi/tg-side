@@ -64,32 +64,32 @@ handleProfitLossCallbacks(bot);
 bot.on('text', async (ctx: MyContext) => {
   const getMessage = languageSettings.getMessage;
   const lang = ctx.session?.language || 'en';
-  
+
   // 处理钱包地址输入
   if (ctx.session.waitingForToken) {
     // 检查是否超时
     const currentTime = Date.now();
     const startTime = ctx.session.sessionStartTime || 0;
-    
+
     if (currentTime - startTime > 30000) { // 30秒超时
       ctx.session.waitingForToken = false;
-      await ctx.reply(lang === 'zh' ? 
-        '设置超时。请重试。' : 
+      await ctx.reply(lang === 'zh' ?
+        '设置超时。请重试。' :
         'Setup timed out. Please try again.');
       return;
     }
-    
+
     await handlePublicKeyInput(ctx, ctx.message.text);
     return;
   }
-  
+
   // 处理止盈止损输入（profitLoss.ts中的函数）
   if (ctx.session.waitingForTakeProfit|| ctx.session.waitingForStopLoss ) {
       // 检查是否超时
       if (checkTimeout(ctx, getMessage)) {
         return;
       }
-      
+
       if (ctx.session.waitingForTakeProfit) {
         await handleTakeProfitInput(ctx, ctx.message.text, getMessage);
       } else if (ctx.session.waitingForStopLoss) {
@@ -97,9 +97,9 @@ bot.on('text', async (ctx: MyContext) => {
       }
       return;
   }
-      
+
   // 处理LP仓位的止盈止损输入（lpPortfolio.ts中的函数）
-  if (ctx.session.waitingForTakeProfitValue && ctx.session.editingPosition || 
+  if (ctx.session.waitingForTakeProfitValue && ctx.session.editingPosition ||
       ctx.session.waitingForStopLossValue && ctx.session.editingPosition) {
 
       // 检查是否是meteora position
@@ -109,7 +109,7 @@ bot.on('text', async (ctx: MyContext) => {
         await handlePositionSettingInput(ctx, getMessage);
       }
       return;
-  } 
+  }
 });
 
 // 设置定时任务更新所有代币信息

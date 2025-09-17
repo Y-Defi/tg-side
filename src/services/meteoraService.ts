@@ -1,4 +1,4 @@
-import { DLMM, PositionInfo as MeteoraPositionInfo } from '@meteora-ag/dlmm'
+import DLMM from '@meteora-ag/dlmm'
 import { Connection, PublicKey } from '@solana/web3.js'
 import Decimal from 'decimal.js'
 import dotenv from 'dotenv'
@@ -75,14 +75,11 @@ export class MeteoraService {
             
             const positionsInfo: MeteoraPositionInfo[] = []
             const userPublicKey = new PublicKey(user.publicKey)
-
-            // 使用Meteora DLMM SDK获取用户positions
-            const dlmm = new DLMM(connection)
             
             // 获取用户所有的position账户
-            const userPositions = await dlmm.getPositionsByUser(userPublicKey)
+            const userPositions = await DLMM.getAllLbPairPositionsByUser(connection,userPublicKey)
 
-            if (!userPositions.length) {
+            if (userPositions.size === 0) {
                 // 更新用户的lastPositionUpdate和空的meteoraPositions数组
                 user.lastPositionUpdate = new Date()
                 user.meteoraPositions = []
@@ -91,128 +88,118 @@ export class MeteoraService {
                 return this.formatError('userNoPositions')
             }
 
-            for (const position of userPositions) {
+            for (const [poolPk, positionInfo] of userPositions) {
                 try {
-                    // 获取池信息
-                    const pairInfo = await dlmm.getPoolInfo(position.lbPair)
-                    if (!pairInfo) {
-                        console.log(`Could not fetch pool info for ${position.lbPair.toBase58()}`)
-                        continue
-                    }
+                    // 遍历这个池子中的所有position
+                    for (const positionData of positionInfo.lbPairPositionsData) {
+                        const tokenAAmount = positionData.positionData.totalXAmount
+                        const tokenBAmount = positionData.positionData.totalYAmount
 
-                    // 获取position详细信息
-                    const positionInfo = await dlmm.getPositionInfo({
-                        userPosition: position.address,
-                        lbPair: position.lbPair
-                    })
+                        // 获取代币信息 (从poolInfo中获取pair信息)
+                        const tokenXInfo = await getTokenInfo(positionInfo.tokenX.publicKey.toBase58())
+                        const tokenYInfo = await getTokenInfo(positionInfo.tokenY.publicKey.toBase58())
 
-                    if (!positionInfo) {
-                        console.log(`Could not fetch position info for ${position.address.toBase58()}`)
-                        continue
-                    }
-
-                    // 计算position的token数量
-                    const { tokenX: tokenAAmount, tokenY: tokenBAmount } = positionInfo.positionData
-
-                    // 获取代币信息
-                    const tokenXInfo = await getTokenInfo(pairInfo.tokenXMint.toBase58())
-                    const tokenYInfo = await getTokenInfo(pairInfo.tokenYMint.toBase58())
-
-                    // 格式化代币数量
-                    const pooledAmountA = new Decimal(tokenAAmount.toString())
-                        .div(10 ** (tokenXInfo?.decimals || 6))
-                        .toString()
-                    const pooledAmountB = new Decimal(tokenBAmount.toString())
-                        .div(10 ** (tokenYInfo?.decimals || 6))
-                        .toString()
-
-                    // 计算代币价值
-                    const tokenAPrice = tokenXInfo ? tokenXInfo.price : '0'
-                    const tokenBPrice = tokenYInfo ? tokenYInfo.price : '0'
-                    const tokenAValue = new Decimal(pooledAmountA).mul(tokenAPrice).toString()
-                    const tokenBValue = new Decimal(pooledAmountB).mul(tokenBPrice).toString()
-
-                    // 获取fees和rewards信息
-                    const feesAndRewards = await dlmm.getClaimableFeesAndRewards({
-                        userPosition: position.address,
-                        lbPair: position.lbPair
-                    })
-
-                    // 处理rewards信息
-                    const rewardsInfos = []
-                    
-                    // 添加fee rewards (tokenX和tokenY的fees)
-                    if (feesAndRewards.feeX.gt(0)) {
-                        const feeXAmount = new Decimal(feesAndRewards.feeX.toString())
-                            .div(10 ** (tokenXInfo?.decimals || 6))
+                        // 格式化代币数量
+                        const pooledAmountA = new Decimal(tokenAAmount.toString())
+                            .div(10 ** (positionInfo.tokenX.mint.decimals))
                             .toString()
-                        const feeXValue = new Decimal(feeXAmount).mul(tokenAPrice).toString()
-                        
-                        rewardsInfos.push({
-                            mint: tokenXInfo?.symbol.replace(/WSOL/gi, 'SOL') || 'Unknown',
-                            address: pairInfo.tokenXMint.toBase58(),
-                            amount: feeXAmount,
-                            decimals: tokenXInfo?.decimals || 6,
-                            tokenPrice: tokenAPrice,
-                            tokenValue: feeXValue
-                        })
-                    }
-
-                    if (feesAndRewards.feeY.gt(0)) {
-                        const feeYAmount = new Decimal(feesAndRewards.feeY.toString())
-                            .div(10 ** (tokenYInfo?.decimals || 6))
+                        const pooledAmountB = new Decimal(tokenBAmount.toString())
+                            .div(10 ** (positionInfo.tokenY.mint.decimals))
                             .toString()
-                        const feeYValue = new Decimal(feeYAmount).mul(tokenBPrice).toString()
-                        
-                        rewardsInfos.push({
-                            mint: tokenYInfo?.symbol.replace(/WSOL/gi, 'SOL') || 'Unknown',
-                            address: pairInfo.tokenYMint.toBase58(),
-                            amount: feeYAmount,
-                            decimals: tokenYInfo?.decimals || 6,
-                            tokenPrice: tokenBPrice,
-                            tokenValue: feeYValue
-                        })
-                    }
 
-                    // 添加其他rewards
-                    if (feesAndRewards.rewards && feesAndRewards.rewards.length > 0) {
-                        for (let i = 0; i < feesAndRewards.rewards.length; i++) {
-                            const reward = feesAndRewards.rewards[i]
-                            if (reward.gt(0)) {
-                                // 这里需要获取reward token的信息，但Meteora SDK可能不直接提供
-                                // 我们可以尝试从pair信息中获取或者跳过
-                                console.log(`Additional reward ${i}: ${reward.toString()}`)
+                        // 计算代币价值
+                        const tokenAPrice = tokenXInfo ? tokenXInfo.price : '0'
+                        const tokenBPrice = tokenYInfo ? tokenYInfo.price : '0'
+                        const tokenAValue = new Decimal(pooledAmountA).mul(tokenAPrice).toString()
+                        const tokenBValue = new Decimal(pooledAmountB).mul(tokenBPrice).toString()
+
+                        // 直接从positionData获取fees和rewards数据
+                        const feeX = positionData.positionData.feeX.toString()
+                        const feeY = positionData.positionData.feeY.toString()
+                        const rewardOne = positionData.positionData.rewardOne.toString()
+                        const rewardTwo = positionData.positionData.rewardTwo.toString()
+
+                        // 构建rewards信息数组
+                        const rewardsInfos: {
+                            mint: string
+                            address: string
+                            amount: string
+                            decimals: number
+                            tokenPrice?: string
+                            tokenValue?: string
+                        }[] = []
+
+                        // 添加Token X的费用奖励
+                        if (feeX !== '0') {
+                            const feeXAmount = new Decimal(feeX)
+                                .div(10 ** positionInfo.tokenX.mint.decimals)
+                                .toString()
+                            const feeXPrice = tokenXInfo?.price || '0'
+                            const feeXValue = new Decimal(feeXAmount).mul(feeXPrice).toString()
+                            
+                            rewardsInfos.push({
+                                mint: tokenXInfo?.symbol.replace(/WSOL/gi, 'SOL') || 'Unknown',
+                                address: positionInfo.tokenX.publicKey.toBase58(),
+                                amount: feeXAmount,
+                                decimals: positionInfo.tokenX.mint.decimals,
+                                tokenPrice: feeXPrice,
+                                tokenValue: feeXValue
+                            })
+                        }
+
+                        // 添加Token Y的费用奖励
+                        if (feeY !== '0') {
+                            const feeYAmount = new Decimal(feeY)
+                                .div(10 ** positionInfo.tokenY.mint.decimals)
+                                .toString()
+                            const feeYPrice = tokenYInfo?.price || '0'
+                            const feeYValue = new Decimal(feeYAmount).mul(feeYPrice).toString()
+                            
+                            rewardsInfos.push({
+                                mint: tokenYInfo?.symbol.replace(/WSOL/gi, 'SOL') || 'Unknown',
+                                address: positionInfo.tokenY.publicKey.toBase58(),
+                                amount: feeYAmount,
+                                decimals: positionInfo.tokenY.mint.decimals,
+                                tokenPrice: feeYPrice,
+                                tokenValue: feeYValue
+                            })
+                        }
+
+                        // 添加其他奖励代币（如果有）
+                        if (rewardOne !== '0' || rewardTwo !== '0') {
+                            // 注意：这里需要根据实际的rewardInfos来确定奖励代币的信息
+                            // 由于没有直接的代币信息，这部分可能需要额外的API调用或配置
+                            console.log('Additional rewards detected but token info not available directly from positionData')
+                        }
+
+                        // 获取价格范围信息 (从positionData中获取)
+                        const priceLower = `Bin ${positionData.positionData.lowerBinId || 'N/A'}`
+                        const priceUpper = `Bin ${positionData.positionData.upperBinId || 'N/A'}`
+
+                        positionsInfo.push({
+                            poolId: poolPk,
+                            publicKey: user.publicKey,
+                            rewardsInfos,
+                            tokenAPrice,
+                            tokenBPrice,
+                            tokenAValue,
+                            tokenBValue,
+                            displayInfo: {
+                                pool: `${tokenXInfo?.symbol.replace(/WSOL/gi, 'SOL') || 'Unknown'} - ${tokenYInfo?.symbol.replace(/WSOL/gi, 'SOL') || 'Unknown'}`,
+                                nft: positionData.publicKey.toBase58(),
+                                priceLower,
+                                priceUpper,
+                                pooledAmountA,
+                                pooledAmountB
                             }
-                        }
+                        })
                     }
-
-                    // 获取价格范围信息
-                    const currentPrice = pairInfo.currentPrice || 0
-                    const priceLower = positionInfo.lowerBinId ? `Bin ${positionInfo.lowerBinId}` : 'N/A'
-                    const priceUpper = positionInfo.upperBinId ? `Bin ${positionInfo.upperBinId}` : 'N/A'
-
-                    positionsInfo.push({
-                        poolId: position.lbPair.toBase58(),
-                        publicKey: user.publicKey,
-                        rewardsInfos,
-                        tokenAPrice,
-                        tokenBPrice,
-                        tokenAValue,
-                        tokenBValue,
-                        displayInfo: {
-                            pool: `${tokenXInfo?.symbol.replace(/WSOL/gi, 'SOL') || 'Unknown'} - ${tokenYInfo?.symbol.replace(/WSOL/gi, 'SOL') || 'Unknown'}`,
-                            nft: position.address.toBase58(),
-                            priceLower,
-                            priceUpper,
-                            pooledAmountA,
-                            pooledAmountB
-                        }
-                    })
                 } catch (positionError) {
-                    console.error(`Error processing position ${position.address.toBase58()}:`, positionError)
+                    console.error(`Error processing pool ${poolPk}:`, positionError)
                     continue
                 }
             }
+
 
             // 更新用户的lastPositionUpdate和meteoraPositions数组
             user.lastPositionUpdate = new Date()
