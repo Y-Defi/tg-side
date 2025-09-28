@@ -2,9 +2,9 @@ import { Markup } from 'telegraf';
 import { CommandHandler, MyContext } from '../types';
 import { FetchPoolService, Pool } from '../services/fetchPoolService';
 
-const topPoolsCommand: CommandHandler = {
-  command: 'top_pools',
-  description: 'Show top liquidity pools',
+const raydiumTopPoolsCommand: CommandHandler = {
+  command: 'raydium_top_pools',
+  description: 'Show top Raydium liquidity pools',
   handler: async (ctx: MyContext, getMessage) => {
     try {
       const lang = ctx.session?.language || 'en';
@@ -23,7 +23,7 @@ const topPoolsCommand: CommandHandler = {
       ).join('\n\n');
 
       // 直接发送消息，不包含按钮
-      await ctx.reply(poolsMessage, {
+      await ctx.reply(`⚡ <b>Top Raydium Pools</b>\n\n${poolsMessage}`, {
           parse_mode: 'HTML',
           disable_web_page_preview: true
       });
@@ -73,4 +73,4 @@ function formatPoolMessage(pool: Pool, index: number): string {
 
 
 
-export default topPoolsCommand;
+export default raydiumTopPoolsCommand;

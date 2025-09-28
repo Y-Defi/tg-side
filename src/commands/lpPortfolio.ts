@@ -117,9 +117,9 @@ async function formatPositionInfo(position: any, index: number, lang: string, te
          `${tpslInfo ? tpslInfo + '\n' : ''}`;
 }
 
-const lpPortfolioCommand: CommandHandler = {
-  command: 'lp_portfolio',
-  description: 'Show your LP portfolio',
+const raydiumLpPortfolioCommand: CommandHandler = {
+  command: 'raydium_lp_portfolio',
+  description: 'Show your Raydium LP portfolio',
   handler: async (ctx: MyContext, getMessage) => {
     try {
       const telegramId = ctx.from?.id;
@@ -423,7 +423,7 @@ async function handlePositionSettingInput(ctx: MyContext, getMessage: Function) 
     ctx.session.editingPosition = undefined;
     
     // 重新显示投资组合
-    await lpPortfolioCommand.handler(ctx, getMessage);
+    await raydiumLpPortfolioCommand.handler(ctx, (key: string) => getMessage(key));
     
   } catch (error) {
     console.error('Error handling position setting input:', error);
@@ -432,7 +432,7 @@ async function handlePositionSettingInput(ctx: MyContext, getMessage: Function) 
   }
 }
 
-export default lpPortfolioCommand;
+export default raydiumLpPortfolioCommand;
 
 // 导出按钮处理函数，以便在主文件中注册
 export { handleTakeProfitButton, handleStopLossButton, handlePositionSettingInput };

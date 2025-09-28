@@ -1,10 +1,12 @@
 import { CommandHandler } from '../types';
 import startCommand from './start';
 import helpCommand from './help';
-import topPoolsCommand from './topPools';
+import raydiumTopPoolsCommand from './topPools';
+import topPoolsCommand from './newTopPools';
 import meteoraTopPoolsCommand from './meteoraTopPools';
 import orcaTopPoolsCommand from './orcaTopPools';
-import lpPortfolioCommand from './lpPortfolio';
+import raydiumLpPortfolioCommand from './lpPortfolio';
+import lpPortfolioCommand from './newLpPortfolio';
 import meteoraLpPortfolioCommand, { handleMeteoraeTakeProfitButton, handleMeteoraStopLossButton, handleMeteoraPositionSettingInput } from './meteoraLpPortfolio';
 import orcaLpPortfolioCommand, { handleOrcaTakeProfitButton, handleOrcaStopLossButton, handleOrcaPositionSettingInput } from './orcaLpPortfolio';
 import walletCommand from './wallet';
@@ -17,9 +19,11 @@ export const commands: CommandHandler[] = [
   startCommand,
   helpCommand,
   topPoolsCommand,
+  raydiumTopPoolsCommand,
   meteoraTopPoolsCommand,
   orcaTopPoolsCommand,
   lpPortfolioCommand,
+  raydiumLpPortfolioCommand,
   meteoraLpPortfolioCommand,
   orcaLpPortfolioCommand,
   walletCommand,
