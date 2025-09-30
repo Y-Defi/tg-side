@@ -109,7 +109,7 @@ async function formatPositionInfo(position: any, index: number, lang: string, te
   const outOfRangeText = getMessage('lpPortfolioMessages.outOfRange', lang);
   
   // 构建position信息文本
-  return `🌊 <b>Meteora ${positionText} #${index}</b> ${tokenASymbol}/${tokenBSymbol}\n` +
+  return `☄️ <b>Meteora ${positionText} #${index}</b> ${tokenASymbol}/${tokenBSymbol}\n` +
          `💰 ${amountText}: ${formatNumber(position.displayInfo.pooledAmountA)} ${tokenASymbol} / ${formatNumber(position.displayInfo.pooledAmountB)} ${tokenBSymbol} ($${formatNumber(tokensValue)})\n` +
          `💸 ${unclaimedFeesText}: ${position.rewardsInfos.map((r: any) => `${formatNumber(r.amount)} ${r.mint}`).join(' / ')} ($${formatNumber(unclaimedFeesValue)})\n` +
          `💵 ${valueText}: $${formatNumber(positionValue)}\n` +
