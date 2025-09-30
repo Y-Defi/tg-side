@@ -12,7 +12,7 @@ import { FetchPoolService } from './services/fetchPoolService';
 // 导入处理函数
 import { handlePublicKeyInput } from './commands/wallet';
 import { handleTakeProfitInput, handleStopLossInput, checkTimeout } from './commands/profitLoss';
-import { handleTakeProfitButton, handleStopLossButton, handlePositionSettingInput } from './commands/lpPortfolio';
+import { handleTakeProfitButton, handleStopLossButton, handlePositionSettingInput } from './commands/raydiumLpPortfolio';
 
 // 加载环境变量
 dotenv.config();

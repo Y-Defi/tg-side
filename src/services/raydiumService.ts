@@ -300,7 +300,7 @@ export class RaydiumService {
                 { telegramId },
                 { 
                     lastPositionUpdate: new Date(),
-                    positions: positionsInfo
+                    radiumPositions: positionsInfo
                 },
                 { new: true }
             );
