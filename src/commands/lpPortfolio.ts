@@ -4,48 +4,19 @@ import { RaydiumService } from '../services/raydiumService';
 import { MeteoraService } from '../services/meteoraService';
 import { OrcaService } from '../services/orcaService';
 import { Markup } from 'telegraf';
-import { languageSettings } from '../i18n';
-
-// 统一Position接口
-interface UnifiedPosition {
-    source: 'raydium' | 'meteora' | 'orca';
-    poolId: string;
-    publicKey: string;
-    positionMint?: string; // For Orca
-    rewardsInfos: {
-        mint: string;
-        address: string;
-        amount: string;
-        decimals: number;
-        tokenPrice?: string;
-        tokenValue?: string;
-    }[];
-    tokenAPrice?: string;
-    tokenBPrice?: string;
-    tokenAValue?: string;
-    tokenBValue?: string;
-    displayInfo: {
-        pool: string;
-        nft: string;
-        priceLower: string;
-        priceUpper: string;
-        pooledAmountA: string;
-        pooledAmountB: string;
-    };
-}
 
 // 格式化数字显示
 function formatNumber(num: string | number): string {
   const value = typeof num === 'string' ? parseFloat(num) : num;
   if (isNaN(value)) return '0';
-  
+
   if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
   if (value >= 1e3) return `${(value / 1e3).toFixed(2)}K`;
   return value.toFixed(2);
 }
 
 // 计算position的总价值
-async function calculatePositionValue(position: UnifiedPosition): Promise<number> {
+async function calculatePositionValue(position: any): Promise<number> {
   const tokenAValue = position.tokenAValue ? parseFloat(position.tokenAValue) : 0;
   const tokenBValue = position.tokenBValue ? parseFloat(position.tokenBValue) : 0;
 
@@ -57,62 +28,41 @@ async function calculatePositionValue(position: UnifiedPosition): Promise<number
   return tokenAValue + tokenBValue + rewardsValue;
 }
 
-// 获取来源图标
-function getSourceIcon(source: string): string {
-  switch (source) {
-    case 'raydium': return '⚡';
-    case 'meteora': return '☄️';
-    case 'orca': return '🌊';
-    default: return '🔸';
-  }
-}
-
-// 格式化position信息
-async function formatPositionInfo(position: UnifiedPosition, index: number, lang: string, telegramId: number, getMessage: Function) {
+// 格式化Raydium position信息
+async function formatRaydiumPosition(position: any, index: number, lang: string, telegramId: number, getMessage: Function) {
   if (!position || !position.displayInfo) return '';
-  
+
   const poolParts = position.displayInfo.pool.split(' - ');
   const tokenASymbol = poolParts[0].replace(/WSOL/gi, 'SOL');
   const tokenBSymbol = poolParts[1].replace(/WSOL/gi, 'SOL');
-  
-  const positionValue = await calculatePositionValue(position);
 
+  const positionValue = await calculatePositionValue(position);
   const tokenAValue = position.tokenAValue ? parseFloat(position.tokenAValue) : 0;
   const tokenBValue = position.tokenBValue ? parseFloat(position.tokenBValue) : 0;
   const tokensValue = tokenAValue + tokenBValue;
-  
+
   const unclaimedFeesValue = position.rewardsInfos?.reduce((total: number, reward: any) => {
     const tokenValue = reward.tokenValue ? parseFloat(reward.tokenValue) : 0;
     return total + tokenValue;
   }, 0) || 0;
-  
-  const isInRange = parseFloat(position.displayInfo.pooledAmountA) > 0 && 
+
+  const isInRange = parseFloat(position.displayInfo.pooledAmountA) > 0 &&
                    parseFloat(position.displayInfo.pooledAmountB) > 0;
-  
-  // 构建止盈止损信息
+
   let tpslInfo = '';
-  const user = await User.findOne({ telegramId: telegramId });
-  if (user) {
-    let positionSettings;
-    const nftMint = position.displayInfo.nft;
-    
-    // 根据来源选择正确的position设置集合
-    if (position.source === 'orca' && user.orcaLpPositions) {
-      positionSettings = user.orcaLpPositions.get(position.positionMint || nftMint);
-    } else if (user.lpPositions) {
-      positionSettings = user.lpPositions.get(nftMint);
-    }
-    
+  const user = await User.findOne({ telegramId });
+  if (user && user.lpPositions) {
+    const positionSettings = user.lpPositions.get(position.displayInfo.nft);
     if (positionSettings) {
       const initialValueText = getMessage('lpPortfolioMessages.initialValue', lang);
       tpslInfo += `💲 ${initialValueText}: $${formatNumber(positionSettings.initialValue)}\n`;
-      
+
       const pnlText = getMessage('lpPortfolioMessages.pnl', lang);
       const pnlValue = positionValue - positionSettings.initialValue;
       const pnlPercentage = (pnlValue / positionSettings.initialValue) * 100;
       const pnlSign = pnlValue >= 0 ? '+' : '';
       tpslInfo += `📈 ${pnlText}: ${pnlSign}$${formatNumber(pnlValue)} (${pnlSign}${pnlPercentage.toFixed(2)}%)\n`;
-      
+
       if (positionSettings.takeProfit) {
         const takeProfitText = getMessage('lpPortfolioMessages.takeProfit', lang);
         const targetText = getMessage('lpPortfolioMessages.target', lang);
@@ -126,7 +76,7 @@ async function formatPositionInfo(position: UnifiedPosition, index: number, lang
       }
     }
   }
-  
+
   const positionText = getMessage('lpPortfolioMessages.position', lang);
   const amountText = getMessage('lpPortfolioMessages.amount', lang);
   const valueText = getMessage('lpPortfolioMessages.value', lang);
@@ -134,11 +84,138 @@ async function formatPositionInfo(position: UnifiedPosition, index: number, lang
   const statusText = getMessage('lpPortfolioMessages.status', lang);
   const inRangeText = getMessage('lpPortfolioMessages.inRange', lang);
   const outOfRangeText = getMessage('lpPortfolioMessages.outOfRange', lang);
-  
-  const sourceIcon = getSourceIcon(position.source);
-  const sourceName = position.source.charAt(0).toUpperCase() + position.source.slice(1);
-  
-  return `${sourceIcon} <b>${sourceName} ${positionText} #${index}</b> ${tokenASymbol}/${tokenBSymbol}\n` +
+
+  return `⚡ <b>${positionText} #${index}</b> ${tokenASymbol}/${tokenBSymbol}\n` +
+         `💰 ${amountText}: ${formatNumber(position.displayInfo.pooledAmountA)} ${tokenASymbol} / ${formatNumber(position.displayInfo.pooledAmountB)} ${tokenBSymbol} ($${formatNumber(tokensValue)})\n` +
+         `💸 ${unclaimedFeesText}: ${position.rewardsInfos?.map((r: any) => `${formatNumber(r.amount)} ${r.mint}`).join(' / ') || 'N/A'} ($${formatNumber(unclaimedFeesValue)})\n` +
+         `💵 ${valueText}: $${formatNumber(positionValue)}\n` +
+         `📊 ${statusText}: ${isInRange ? `✅ ${inRangeText}` : `❌ ${outOfRangeText}`}\n` +
+         `${tpslInfo ? tpslInfo + '\n' : ''}`;
+}
+
+// 格式化Meteora position信息
+async function formatMeteoraPosition(position: any, index: number, lang: string, telegramId: number, getMessage: Function) {
+  if (!position || !position.displayInfo) return '';
+
+  const poolParts = position.displayInfo.pool.split(' - ');
+  const tokenASymbol = poolParts[0].replace(/WSOL/gi, 'SOL');
+  const tokenBSymbol = poolParts[1].replace(/WSOL/gi, 'SOL');
+
+  const positionValue = await calculatePositionValue(position);
+  const tokenAValue = position.tokenAValue ? parseFloat(position.tokenAValue) : 0;
+  const tokenBValue = position.tokenBValue ? parseFloat(position.tokenBValue) : 0;
+  const tokensValue = tokenAValue + tokenBValue;
+
+  const unclaimedFeesValue = position.rewardsInfos?.reduce((total: number, reward: any) => {
+    const tokenValue = reward.tokenValue ? parseFloat(reward.tokenValue) : 0;
+    return total + tokenValue;
+  }, 0) || 0;
+
+  const isInRange = parseFloat(position.displayInfo.pooledAmountA) > 0 &&
+                   parseFloat(position.displayInfo.pooledAmountB) > 0;
+
+  let tpslInfo = '';
+  const user = await User.findOne({ telegramId });
+  if (user && user.lpPositions) {
+    const positionSettings = user.lpPositions.get(position.displayInfo.nft);
+    if (positionSettings) {
+      const initialValueText = getMessage('lpPortfolioMessages.initialValue', lang);
+      tpslInfo += `💲 ${initialValueText}: $${formatNumber(positionSettings.initialValue)}\n`;
+
+      const pnlText = getMessage('lpPortfolioMessages.pnl', lang);
+      const pnlValue = positionValue - positionSettings.initialValue;
+      const pnlPercentage = (pnlValue / positionSettings.initialValue) * 100;
+      const pnlSign = pnlValue >= 0 ? '+' : '';
+      tpslInfo += `📈 ${pnlText}: ${pnlSign}$${formatNumber(pnlValue)} (${pnlSign}${pnlPercentage.toFixed(2)}%)\n`;
+
+      if (positionSettings.takeProfit) {
+        const takeProfitText = getMessage('lpPortfolioMessages.takeProfit', lang);
+        const targetText = getMessage('lpPortfolioMessages.target', lang);
+        tpslInfo += `🔼 ${takeProfitText}: ${positionSettings.takeProfit.percentage}% (${targetText}: $${formatNumber(positionSettings.takeProfit.targetValue)})`;
+      }
+      if (positionSettings.stopLoss) {
+        if (positionSettings.takeProfit) tpslInfo += '\n';
+        const stopLossText = getMessage('lpPortfolioMessages.stopLoss', lang);
+        const targetText = getMessage('lpPortfolioMessages.target', lang);
+        tpslInfo += `🔽 ${stopLossText}: ${positionSettings.stopLoss.percentage}% (${targetText}: $${formatNumber(positionSettings.stopLoss.targetValue)})`;
+      }
+    }
+  }
+
+  const positionText = getMessage('lpPortfolioMessages.position', lang);
+  const amountText = getMessage('lpPortfolioMessages.amount', lang);
+  const valueText = getMessage('lpPortfolioMessages.value', lang);
+  const unclaimedFeesText = getMessage('lpPortfolioMessages.unclaimedFees', lang);
+  const statusText = getMessage('lpPortfolioMessages.status', lang);
+  const inRangeText = getMessage('lpPortfolioMessages.inRange', lang);
+  const outOfRangeText = getMessage('lpPortfolioMessages.outOfRange', lang);
+
+  return `☄️ <b>Meteora ${positionText} #${index}</b> ${tokenASymbol}/${tokenBSymbol}\n` +
+         `💰 ${amountText}: ${formatNumber(position.displayInfo.pooledAmountA)} ${tokenASymbol} / ${formatNumber(position.displayInfo.pooledAmountB)} ${tokenBSymbol} ($${formatNumber(tokensValue)})\n` +
+         `💸 ${unclaimedFeesText}: ${position.rewardsInfos?.map((r: any) => `${formatNumber(r.amount)} ${r.mint}`).join(' / ') || 'N/A'} ($${formatNumber(unclaimedFeesValue)})\n` +
+         `💵 ${valueText}: $${formatNumber(positionValue)}\n` +
+         `📊 ${statusText}: ${isInRange ? `✅ ${inRangeText}` : `❌ ${outOfRangeText}`}\n` +
+         `${tpslInfo ? tpslInfo + '\n' : ''}`;
+}
+
+// 格式化Orca position信息
+async function formatOrcaPosition(position: any, index: number, lang: string, telegramId: number, getMessage: Function) {
+  if (!position || !position.displayInfo) return '';
+
+  const poolParts = position.displayInfo.pool.split(' - ');
+  const tokenASymbol = poolParts[0].replace(/WSOL/gi, 'SOL');
+  const tokenBSymbol = poolParts[1].replace(/WSOL/gi, 'SOL');
+
+  const positionValue = await calculatePositionValue(position);
+  const tokenAValue = position.tokenAValue ? parseFloat(position.tokenAValue) : 0;
+  const tokenBValue = position.tokenBValue ? parseFloat(position.tokenBValue) : 0;
+  const tokensValue = tokenAValue + tokenBValue;
+
+  const unclaimedFeesValue = position.rewardsInfos?.reduce((total: number, reward: any) => {
+    const tokenValue = reward.tokenValue ? parseFloat(reward.tokenValue) : 0;
+    return total + tokenValue;
+  }, 0) || 0;
+
+  const isInRange = parseFloat(position.displayInfo.pooledAmountA) > 0 &&
+                   parseFloat(position.displayInfo.pooledAmountB) > 0;
+
+  let tpslInfo = '';
+  const user = await User.findOne({ telegramId });
+  if (user && user.orcaLpPositions) {
+    const positionSettings = user.orcaLpPositions.get(position.positionMint);
+    if (positionSettings) {
+      const initialValueText = getMessage('lpPortfolioMessages.initialValue', lang);
+      tpslInfo += `💲 ${initialValueText}: $${formatNumber(positionSettings.initialValue)}\n`;
+
+      const pnlText = getMessage('lpPortfolioMessages.pnl', lang);
+      const pnlValue = positionValue - positionSettings.initialValue;
+      const pnlPercentage = (pnlValue / positionSettings.initialValue) * 100;
+      const pnlSign = pnlValue >= 0 ? '+' : '';
+      tpslInfo += `📈 ${pnlText}: ${pnlSign}$${formatNumber(pnlValue)} (${pnlSign}${pnlPercentage.toFixed(2)}%)\n`;
+
+      if (positionSettings.takeProfit) {
+        const takeProfitText = getMessage('lpPortfolioMessages.takeProfit', lang);
+        const targetText = getMessage('lpPortfolioMessages.target', lang);
+        tpslInfo += `🔼 ${takeProfitText}: ${positionSettings.takeProfit.percentage}% (${targetText}: $${formatNumber(positionSettings.takeProfit.targetValue)})`;
+      }
+      if (positionSettings.stopLoss) {
+        if (positionSettings.takeProfit) tpslInfo += '\n';
+        const stopLossText = getMessage('lpPortfolioMessages.stopLoss', lang);
+        const targetText = getMessage('lpPortfolioMessages.target', lang);
+        tpslInfo += `🔽 ${stopLossText}: ${positionSettings.stopLoss.percentage}% (${targetText}: $${formatNumber(positionSettings.stopLoss.targetValue)})`;
+      }
+    }
+  }
+
+  const positionText = getMessage('lpPortfolioMessages.position', lang);
+  const amountText = getMessage('lpPortfolioMessages.amount', lang);
+  const valueText = getMessage('lpPortfolioMessages.value', lang);
+  const unclaimedFeesText = getMessage('lpPortfolioMessages.unclaimedFees', lang);
+  const statusText = getMessage('lpPortfolioMessages.status', lang);
+  const inRangeText = getMessage('lpPortfolioMessages.inRange', lang);
+  const outOfRangeText = getMessage('lpPortfolioMessages.outOfRange', lang);
+
+  return `🌊 <b>${positionText} #${index}</b> ${tokenASymbol}/${tokenBSymbol}\n` +
          `💰 ${amountText}: ${formatNumber(position.displayInfo.pooledAmountA)} ${tokenASymbol} / ${formatNumber(position.displayInfo.pooledAmountB)} ${tokenBSymbol} ($${formatNumber(tokensValue)})\n` +
          `💸 ${unclaimedFeesText}: ${position.rewardsInfos?.map((r: any) => `${formatNumber(r.amount)} ${r.mint}`).join(' / ') || 'N/A'} ($${formatNumber(unclaimedFeesValue)})\n` +
          `💵 ${valueText}: $${formatNumber(positionValue)}\n` +
@@ -170,37 +247,12 @@ const lpPortfolioCommand: CommandHandler = {
         MeteoraService.getUserPositions(telegramId),
         OrcaService.getUserPositions(telegramId)
       ]);
-      
-      // 合并所有positions
-      const allPositions: UnifiedPosition[] = [];
-      
-      if (raydiumResult.status === 'fulfilled' && raydiumResult.value.positions) {
-        allPositions.push(...raydiumResult.value.positions.map(pos => ({
-          ...pos,
-          source: 'raydium' as const
-        })));
-      }
-      
-      if (meteoraResult.status === 'fulfilled' && meteoraResult.value.positions) {
-        allPositions.push(...meteoraResult.value.positions.map(pos => ({
-          ...pos,
-          source: 'meteora' as const
-        })));
-      }
-      
-      if (orcaResult.status === 'fulfilled' && orcaResult.value.positions) {
-        allPositions.push(...orcaResult.value.positions.map(pos => ({
-          ...pos,
-          source: 'orca' as const
-        })));
-      }
-      
-      // 按 DEX 分组显示
-      const raydiumPositions = allPositions.filter(p => p.source === 'raydium');
-      const meteoraPositions = allPositions.filter(p => p.source === 'meteora');
-      const orcaPositions = allPositions.filter(p => p.source === 'orca');
 
-      if (allPositions.length === 0) {
+      const raydiumPositions = raydiumResult.status === 'fulfilled' && raydiumResult.value.positions ? raydiumResult.value.positions : [];
+      const meteoraPositions = meteoraResult.status === 'fulfilled' && meteoraResult.value.positions ? meteoraResult.value.positions : [];
+      const orcaPositions = orcaResult.status === 'fulfilled' && orcaResult.value.positions ? orcaResult.value.positions : [];
+
+      if (raydiumPositions.length === 0 && meteoraPositions.length === 0 && orcaPositions.length === 0) {
         await ctx.telegram.editMessageText(
           ctx.chat?.id,
           loadingMsg.message_id,
@@ -211,7 +263,10 @@ const lpPortfolioCommand: CommandHandler = {
       }
 
       const totalValueText = getMessage('lpPortfolioMessages.totalValue', lang);
+      const portfolioTitle = getMessage('lpPortfolioMessages.portfolioTitle', lang);
       let portfolioInfo = '';
+      const allButtons: any[] = [];
+      let buttonIndex = 1;
 
       // Raydium
       if (raydiumPositions.length > 0) {
@@ -221,12 +276,28 @@ const lpPortfolioCommand: CommandHandler = {
           return total + value;
         }, Promise.resolve(0));
 
-        portfolioInfo += `⚡ <b>Raydium LP Portfolio</b>\n\n`;
+        portfolioInfo += `⚡ <b>Raydium ${portfolioTitle}</b>\n\n`;
         portfolioInfo += `💰 ${totalValueText}: $${formatNumber(raydiumValue)}\n\n`;
 
         for (let i = 0; i < raydiumPositions.length; i++) {
-          const info = await formatPositionInfo(raydiumPositions[i], i + 1, lang, telegramId, getMessage);
+          const info = await formatRaydiumPosition(raydiumPositions[i], i + 1, lang, telegramId, getMessage);
           if (info) portfolioInfo += info + '\n';
+
+          // Add buttons for this position
+          if (raydiumPositions[i] && raydiumPositions[i].displayInfo) {
+            const nftMint = raydiumPositions[i].displayInfo.nft;
+            allButtons.push([
+              Markup.button.callback(
+                `💹 Take Profit #${buttonIndex}`,
+                `tp_${nftMint}`
+              ),
+              Markup.button.callback(
+                `📉 Stop Loss #${buttonIndex}`,
+                `sl_${nftMint}`
+              )
+            ]);
+            buttonIndex++;
+          }
         }
         portfolioInfo += '\n';
       }
@@ -239,12 +310,28 @@ const lpPortfolioCommand: CommandHandler = {
           return total + value;
         }, Promise.resolve(0));
 
-        portfolioInfo += `☄️ <b>Meteora LP Portfolio</b>\n\n`;
+        portfolioInfo += `☄️ <b>Meteora ${portfolioTitle}</b>\n\n`;
         portfolioInfo += `💰 ${totalValueText}: $${formatNumber(meteoraValue)}\n\n`;
 
         for (let i = 0; i < meteoraPositions.length; i++) {
-          const info = await formatPositionInfo(meteoraPositions[i], i + 1, lang, telegramId, getMessage);
+          const info = await formatMeteoraPosition(meteoraPositions[i], i + 1, lang, telegramId, getMessage);
           if (info) portfolioInfo += info + '\n';
+
+          // Add buttons for this position
+          if (meteoraPositions[i] && meteoraPositions[i].displayInfo) {
+            const nftMint = meteoraPositions[i].displayInfo.nft;
+            allButtons.push([
+              Markup.button.callback(
+                `💹 Take Profit #${buttonIndex}`,
+                `tp_meteora_${nftMint}`
+              ),
+              Markup.button.callback(
+                `📉 Stop Loss #${buttonIndex}`,
+                `sl_meteora_${nftMint}`
+              )
+            ]);
+            buttonIndex++;
+          }
         }
         portfolioInfo += '\n';
       }
@@ -257,58 +344,39 @@ const lpPortfolioCommand: CommandHandler = {
           return total + value;
         }, Promise.resolve(0));
 
-        portfolioInfo += `🌊 <b>Orca LP Portfolio</b>\n\n`;
+        portfolioInfo += `🌊 <b>Orca ${portfolioTitle}</b>\n\n`;
         portfolioInfo += `💰 ${totalValueText}: $${formatNumber(orcaValue)}\n\n`;
 
         for (let i = 0; i < orcaPositions.length; i++) {
-          const info = await formatPositionInfo(orcaPositions[i], i + 1, lang, telegramId, getMessage);
+          const info = await formatOrcaPosition(orcaPositions[i], i + 1, lang, telegramId, getMessage);
           if (info) portfolioInfo += info + '\n';
+
+          // Add buttons for this position
+          if (orcaPositions[i] && orcaPositions[i].displayInfo) {
+            const positionMint = orcaPositions[i].positionMint || orcaPositions[i].displayInfo.nft;
+            allButtons.push([
+              Markup.button.callback(
+                `💹 Take Profit #${buttonIndex}`,
+                `orca_tp_${positionMint}`
+              ),
+              Markup.button.callback(
+                `📉 Stop Loss #${buttonIndex}`,
+                `orca_sl_${positionMint}`
+              )
+            ]);
+            buttonIndex++;
+          }
         }
       }
-      
-      // 创建按钮
-      const inlineKeyboard = [];
-      
-      allPositions.forEach((position, index) => {
-        if (position && position.displayInfo) {
-          const nftMint = position.displayInfo.nft;
-          const positionMint = position.positionMint || nftMint;
-          
-          let tpCallback: string;
-          let slCallback: string;
-          
-          if (position.source === 'orca') {
-            tpCallback = `orca_tp_${positionMint}`;
-            slCallback = `orca_sl_${positionMint}`;
-          } else if (position.source === 'meteora') {
-            tpCallback = `tp_meteora_${nftMint}`;
-            slCallback = `sl_meteora_${nftMint}`;
-          } else {
-            tpCallback = `tp_${nftMint}`;
-            slCallback = `sl_${nftMint}`;
-          }
-          
-          inlineKeyboard.push([
-            Markup.button.callback(
-              `💹 Take Profit #${index + 1}`, 
-              tpCallback
-            ),
-            Markup.button.callback(
-              `📉 Stop Loss #${index + 1}`, 
-              slCallback
-            )
-          ]);
-        }
-      });
-      
+
       await ctx.telegram.editMessageText(
         ctx.chat?.id,
         loadingMsg.message_id,
         undefined,
-        portfolioInfo,
-        { 
+        portfolioInfo.trim(),
+        {
           parse_mode: 'HTML',
-          ...Markup.inlineKeyboard(inlineKeyboard)
+          ...Markup.inlineKeyboard(allButtons)
         }
       );
       
