@@ -61,7 +61,7 @@ async function calculatePositionValue(position: UnifiedPosition): Promise<number
 function getSourceIcon(source: string): string {
   switch (source) {
     case 'raydium': return '⚡';
-    case 'meteora': return '🌟';
+    case 'meteora': return '☄️';
     case 'orca': return '🌊';
     default: return '🔸';
   }
@@ -195,6 +195,11 @@ const lpPortfolioCommand: CommandHandler = {
         })));
       }
       
+      // 按 DEX 分组显示
+      const raydiumPositions = allPositions.filter(p => p.source === 'raydium');
+      const meteoraPositions = allPositions.filter(p => p.source === 'meteora');
+      const orcaPositions = allPositions.filter(p => p.source === 'orca');
+
       if (allPositions.length === 0) {
         await ctx.telegram.editMessageText(
           ctx.chat?.id,
@@ -204,27 +209,62 @@ const lpPortfolioCommand: CommandHandler = {
         );
         return;
       }
-      
-      // 格式化每个position的信息
-      const positionsInfo = await Promise.all(
-        allPositions.map((position, index) => 
-          formatPositionInfo(position, index + 1, lang, telegramId, getMessage)
-        )
-      );
-      
-      // 计算总价值
-      const totalValue = await allPositions.reduce(async (promisedTotal, position) => {
-        const total = await promisedTotal;
-        const value = await calculatePositionValue(position);
-        return total + value;
-      }, Promise.resolve(0));
-      
-      const portfolioTitle = getMessage('lpPortfolioMessages.portfolioTitle', lang);
+
       const totalValueText = getMessage('lpPortfolioMessages.totalValue', lang);
-      
-      const portfolioInfo = `📊 <b>${portfolioTitle}</b>\n\n` +
-                           `💰 ${totalValueText}: $${formatNumber(totalValue)}\n\n` +
-                           `${positionsInfo.filter(Boolean).join('\n\n')}`;
+      let portfolioInfo = '';
+
+      // Raydium
+      if (raydiumPositions.length > 0) {
+        const raydiumValue = await raydiumPositions.reduce(async (promisedTotal, position) => {
+          const total = await promisedTotal;
+          const value = await calculatePositionValue(position);
+          return total + value;
+        }, Promise.resolve(0));
+
+        portfolioInfo += `⚡ <b>Raydium LP Portfolio</b>\n\n`;
+        portfolioInfo += `💰 ${totalValueText}: $${formatNumber(raydiumValue)}\n\n`;
+
+        for (let i = 0; i < raydiumPositions.length; i++) {
+          const info = await formatPositionInfo(raydiumPositions[i], i + 1, lang, telegramId, getMessage);
+          if (info) portfolioInfo += info + '\n';
+        }
+        portfolioInfo += '\n';
+      }
+
+      // Meteora
+      if (meteoraPositions.length > 0) {
+        const meteoraValue = await meteoraPositions.reduce(async (promisedTotal, position) => {
+          const total = await promisedTotal;
+          const value = await calculatePositionValue(position);
+          return total + value;
+        }, Promise.resolve(0));
+
+        portfolioInfo += `☄️ <b>Meteora LP Portfolio</b>\n\n`;
+        portfolioInfo += `💰 ${totalValueText}: $${formatNumber(meteoraValue)}\n\n`;
+
+        for (let i = 0; i < meteoraPositions.length; i++) {
+          const info = await formatPositionInfo(meteoraPositions[i], i + 1, lang, telegramId, getMessage);
+          if (info) portfolioInfo += info + '\n';
+        }
+        portfolioInfo += '\n';
+      }
+
+      // Orca
+      if (orcaPositions.length > 0) {
+        const orcaValue = await orcaPositions.reduce(async (promisedTotal, position) => {
+          const total = await promisedTotal;
+          const value = await calculatePositionValue(position);
+          return total + value;
+        }, Promise.resolve(0));
+
+        portfolioInfo += `🌊 <b>Orca LP Portfolio</b>\n\n`;
+        portfolioInfo += `💰 ${totalValueText}: $${formatNumber(orcaValue)}\n\n`;
+
+        for (let i = 0; i < orcaPositions.length; i++) {
+          const info = await formatPositionInfo(orcaPositions[i], i + 1, lang, telegramId, getMessage);
+          if (info) portfolioInfo += info + '\n';
+        }
+      }
       
       // 创建按钮
       const inlineKeyboard = [];
